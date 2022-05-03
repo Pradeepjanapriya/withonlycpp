@@ -1,0 +1,51 @@
+import org.gradle.internal.jvm.Jvm
+
+/*
+ * There is currently no "C application" plugin, so this build uses the "C++ application" plugin and then reconfigures it
+ * to build C instead.
+ */
+plugins {
+    id 'cpp-library'
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+
+library {
+
+
+
+    binaries.configureEach { CppBinary binary ->
+        def compileTask = binary.compileTask.get()
+        compileTask.includes.from("${Jvm.current().javaHome}/include")
+
+        def osFamily = binary.targetPlatform.targetMachine.operatingSystemFamily
+        if (osFamily.macOs) {
+            compileTask.includes.from("${Jvm.current().javaHome}/include/darwin")
+        } else if (osFamily.linux) {
+            compileTask.includes.from("${Jvm.current().javaHome}/include/linux")
+        } else if (osFamily.windows) {
+            compileTask.includes.from("${Jvm.current().javaHome}/include/win32")
+        }
+
+        compileTask.source.from fileTree(dir: "src/main/cpp", include: "**/*.cpp")
+
+        def toolChain = binary.toolChain
+        if (toolChain instanceof VisualCpp) {
+            compileTask.compilerArgs.addAll(["/TP"])
+        } else if (compileTask.targetPlatform.get().operatingSystem.isMacOsX()) {
+            compileTask.compilerArgs.add('-std=gnu++11')
+        }
+
+        def linkTask = binary.linkTask.get()
+        linkTask.linkerArgs.addAll(linkTask.targetPlatform.map {
+            if (it.operatingSystem.isWindows()) {
+                return ['user32.lib', 'ole32.lib','shell32.lib','pdh.lib']
+            }
+            return []
+        })
+
+
+    }
+}
